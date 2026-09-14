@@ -1,0 +1,39 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: kopkar_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-koperasi_digital}
+      POSTGRES_USER: ${DB_USERNAME:-kopkar_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-kopkar_secret}
+    ports:
+      - "${DB_PORT:-5433}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-kopkar_user} -d ${DB_DATABASE:-koperasi_digital}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Redis dijalankan via Homebrew lokal (brew services), bukan container,
+  # untuk menghindari bentrok port 6379 dengan instance yang sudah berjalan.
+
+  minio:
+    image: minio/minio:latest
+    container_name: kopkar_minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-kopkar_minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-kopkar_minio_secret}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - miniodata:/data
+
+volumes:
+  pgdata:
+  miniodata:
