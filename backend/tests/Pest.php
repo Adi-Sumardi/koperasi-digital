@@ -1,5 +1,9 @@
 <?php
 
+use App\Actions\Savings\CreateMemberSavingsAccountsAction;
+use App\Models\Member;
+use App\Models\User;
+use Database\Seeders\ChartOfAccountsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -17,6 +21,12 @@ use Tests\TestCase;
 pest()->extend(TestCase::class)
     ->use(RefreshDatabase::class)
     ->in('Feature');
+
+// Modul akuntansi/simpanan butuh Chart of Accounts (Kas, Simpanan Pokok/Wajib/Sukarela)
+// sebelum JournalPostingService bisa memposting jurnal berpasangan.
+uses()
+    ->beforeEach(fn () => test()->seed(ChartOfAccountsSeeder::class))
+    ->in('Feature/Savings');
 
 /*
 |--------------------------------------------------------------------------
@@ -47,4 +57,13 @@ expect()->extend('toBeOne', function () {
 function something()
 {
     // ..
+}
+
+function memberWithSavingsAccounts(): Member
+{
+    $member = Member::factory()->for(User::factory())->create();
+
+    app(CreateMemberSavingsAccountsAction::class)->execute($member);
+
+    return $member->refresh();
 }

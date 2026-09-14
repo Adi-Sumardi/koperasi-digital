@@ -7,6 +7,9 @@ use App\Http\Controllers\Api\V1\Auth\LogoutController;
 use App\Http\Controllers\Api\V1\Auth\MeController;
 use App\Http\Controllers\Api\V1\Auth\RegisterController;
 use App\Http\Controllers\Api\V1\Auth\SubmitKycController;
+use App\Http\Controllers\Api\V1\Savings\DepositSavingsController;
+use App\Http\Controllers\Api\V1\Savings\SavingsSummaryController;
+use App\Http\Controllers\Api\V1\Savings\WithdrawSavingsController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->name('api.v1.')->group(function () {
@@ -18,6 +21,15 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
             Route::post('logout', LogoutController::class)->name('logout');
             Route::get('me', MeController::class)->name('me');
             Route::post('kyc/submit', SubmitKycController::class)->name('kyc.submit');
+        });
+    });
+
+    Route::middleware('auth:sanctum')->prefix('savings')->name('savings.')->group(function () {
+        Route::get('/', SavingsSummaryController::class)->name('index');
+
+        Route::middleware('idempotency')->group(function () {
+            Route::post('deposit', DepositSavingsController::class)->name('deposit');
+            Route::post('withdraw', WithdrawSavingsController::class)->name('withdraw');
         });
     });
 });

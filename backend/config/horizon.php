@@ -199,7 +199,9 @@ return [
     'defaults' => [
         'supervisor-1' => [
             'connection' => 'redis',
-            'queue' => ['default'],
+            // Urutan prioritas antrian (rules/dispatch-engine.md §3): worker mengutamakan
+            // job pembayaran instan, lalu posting jurnal, notifikasi, dan laporan.
+            'queue' => ['high-financial', 'financial-ledger', 'notifications', 'reports', 'default'],
             'balance' => 'auto',
             'autoScalingStrategy' => 'time',
             'maxProcesses' => 1,

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions\Auth;
 
+use App\Actions\Savings\CreateMemberSavingsAccountsAction;
 use App\Enums\MemberStatus;
 use App\Enums\UserRole;
 use App\Models\Member;
@@ -12,6 +13,10 @@ use Illuminate\Support\Facades\DB;
 
 class RegisterMemberAction
 {
+    public function __construct(
+        private readonly CreateMemberSavingsAccountsAction $createSavingsAccounts,
+    ) {}
+
     /**
      * @param  array{name: string, email: string, phone_number: string, password: string, nik: string, employee_nip: string, department: string, bank_name: string, bank_account_number: string, monthly_salary?: float|null}  $data
      */
@@ -36,6 +41,8 @@ class RegisterMemberAction
                 'monthly_salary' => $data['monthly_salary'] ?? 0,
                 'status' => MemberStatus::PENDING,
             ]);
+
+            $this->createSavingsAccounts->execute($member);
 
             return $member;
         });
