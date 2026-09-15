@@ -1,0 +1,44 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Http\Controllers\Web\Admin\Auth;
+
+use App\Actions\Admin\Auth\AttemptAdminLoginAction;
+use App\Http\Controllers\Controller;
+use App\Http\Requests\Web\Admin\Auth\AdminLoginRequest;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\View\View;
+
+class LoginController extends Controller
+{
+    public function create(): View
+    {
+        return view('admin.auth.login');
+    }
+
+    public function store(AdminLoginRequest $request, AttemptAdminLoginAction $action): RedirectResponse
+    {
+        $action->execute(
+            email: $request->validated('email'),
+            password: $request->validated('password'),
+            remember: (bool) $request->validated('remember'),
+        );
+
+        $request->session()->regenerate();
+
+        return redirect()->intended(route('admin.dashboard'));
+    }
+
+    public function destroy(Request $request): RedirectResponse
+    {
+        Auth::guard('web')->logout();
+
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+
+        return redirect()->route('admin.login');
+    }
+}

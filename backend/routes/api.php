@@ -8,7 +8,6 @@ use App\Http\Controllers\Api\V1\Auth\MeController;
 use App\Http\Controllers\Api\V1\Auth\RegisterController;
 use App\Http\Controllers\Api\V1\Auth\SubmitKycController;
 use App\Http\Controllers\Api\V1\Loans\ApplyLoanController;
-use App\Http\Controllers\Api\V1\Loans\DecideLoanApplicationController;
 use App\Http\Controllers\Api\V1\Loans\LoanIndexController;
 use App\Http\Controllers\Api\V1\Loans\RepayLoanController;
 use App\Http\Controllers\Api\V1\Loans\SimulateLoanController;
@@ -41,7 +40,6 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
     Route::middleware('auth:sanctum')->prefix('loans')->name('loans.')->group(function () {
         Route::get('simulate', SimulateLoanController::class)->name('simulate');
         Route::get('/', LoanIndexController::class)->name('index');
-        Route::post('applications/{loanApplication}/decide', DecideLoanApplicationController::class)->name('applications.decide');
 
         Route::middleware('idempotency')->group(function () {
             Route::post('apply', ApplyLoanController::class)->name('apply');

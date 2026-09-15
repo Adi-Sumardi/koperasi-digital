@@ -3,6 +3,7 @@
 use App\Actions\Savings\CreateMemberSavingsAccountsAction;
 use App\Enums\KycStatus;
 use App\Enums\SavingsType;
+use App\Enums\UserRole;
 use App\Models\Member;
 use App\Models\User;
 use Database\Seeders\ChartOfAccountsSeeder;
@@ -34,6 +35,10 @@ uses()
 uses()
     ->beforeEach(fn () => test()->seed([ChartOfAccountsSeeder::class, LoanProductSeeder::class]))
     ->in('Feature/Loans');
+
+uses()
+    ->beforeEach(fn () => test()->seed([ChartOfAccountsSeeder::class, LoanProductSeeder::class]))
+    ->in('Feature/Admin');
 
 /*
 |--------------------------------------------------------------------------
@@ -73,6 +78,11 @@ function memberWithSavingsAccounts(): Member
     app(CreateMemberSavingsAccountsAction::class)->execute($member);
 
     return $member->refresh();
+}
+
+function adminUser(UserRole $role = UserRole::TREASURER): User
+{
+    return User::factory()->create(['role' => $role]);
 }
 
 /**

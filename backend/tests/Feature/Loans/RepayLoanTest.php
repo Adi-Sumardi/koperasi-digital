@@ -24,9 +24,9 @@ function disbursedLoan($member, float $amount = 3_000_000, int $tenorMonths = 3)
     $application = LoanApplication::findOrFail($applyResponse->json('data.id'));
 
     $treasurer = User::factory()->create(['role' => UserRole::TREASURER]);
-    test()->actingAs($treasurer, 'sanctum')
-        ->postJson("/api/v1/loans/applications/{$application->id}/decide", ['decision' => 'approved'])
-        ->assertOk();
+    test()->actingAs($treasurer, 'web')
+        ->post("/admin/loans/applications/{$application->id}/decide", ['decision' => 'approved'])
+        ->assertRedirect();
 
     return $member->loans()->firstOrFail();
 }
