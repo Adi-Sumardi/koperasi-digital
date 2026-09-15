@@ -44,13 +44,15 @@ erDiagram
 
     USERS {
         uuid id PK
+        string name
         string email UK
         string phone_number UK
-        string password_hash
+        string password
         string transaction_pin_hash
         string role
         boolean is_active
         timestamptz created_at
+        timestamptz updated_at
     }
 
     MEMBERS {
@@ -58,14 +60,17 @@ erDiagram
         uuid user_id FK
         string member_number UK
         string full_name
-        string nik UK
+        text nik
+        char nik_hash UK
         string employee_nip UK
         string department
         string bank_name
-        string bank_account_number
+        text bank_account_number
         decimal monthly_salary
         string status
         timestamptz joined_at
+        timestamptz created_at
+        timestamptz updated_at
     }
 
     MEMBER_KYC {
@@ -77,6 +82,8 @@ erDiagram
         string rejection_reason
         uuid verified_by FK
         timestamptz verified_at
+        timestamptz created_at
+        timestamptz updated_at
     }
 
     SAVINGS_ACCOUNTS {
@@ -87,6 +94,7 @@ erDiagram
         decimal balance
         string status
         timestamptz created_at
+        timestamptz updated_at
     }
 
     SAVINGS_TRANSACTIONS {
@@ -109,6 +117,33 @@ erDiagram
         integer max_tenor_months
         decimal max_ceiling_amount
         boolean is_active
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    LOAN_APPLICATIONS {
+        uuid id PK
+        uuid member_id FK
+        uuid loan_product_id FK
+        string application_number UK
+        decimal amount
+        integer tenor_months
+        string purpose
+        string guarantee_type
+        string status
+        string rejection_reason
+        timestamptz decided_at
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    LOAN_APPROVALS {
+        uuid id PK
+        uuid loan_application_id FK
+        uuid approver_id FK
+        string decision
+        string notes
+        timestamptz decided_at
     }
 
     LOANS {
@@ -123,6 +158,8 @@ erDiagram
         decimal outstanding_balance
         string status
         timestamptz disbursed_at
+        timestamptz created_at
+        timestamptz updated_at
     }
 
     LOAN_INSTALLMENTS {
@@ -145,6 +182,8 @@ erDiagram
         string account_type
         string normal_balance
         boolean is_active
+        timestamptz created_at
+        timestamptz updated_at
     }
 
     JOURNAL_ENTRIES {
@@ -211,15 +250,16 @@ erDiagram
 
 ## 2. Kamus Data & Spesifikasi Kolom (*Data Dictionary*)
 
-### 2.1. Tabel `users` & `members`
+### 2.1. Tabel `users`, `members` & `member_kyc`
 Tabel utama autentikasi dan profil keanggotaan koperasi karyawan:
 
 ```sql
 CREATE TABLE users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(255) NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
     phone_number VARCHAR(32) UNIQUE NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
+    password VARCHAR(255) NOT NULL,
     transaction_pin_hash VARCHAR(255),
     role VARCHAR(32) NOT NULL DEFAULT 'member', -- member, treasurer, chairman, auditor, superadmin
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
@@ -229,21 +269,37 @@ CREATE TABLE users (
 
 CREATE TABLE members (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-    member_number VARCHAR(32) UNIQUE NOT NULL, -- KOP-2026-00001
+    user_id UUID NOT NULL UNIQUE REFERENCES users(id) ON DELETE RESTRICT,
+    member_number VARCHAR(32) UNIQUE, -- NULL hingga keanggotaan AKTIF (lihat §5.1 BRD.md); format KOP-2026-00001
     full_name VARCHAR(255) NOT NULL,
-    nik VARCHAR(255) UNIQUE NOT NULL, -- Enkripsi PII AES-256
+    nik TEXT NOT NULL, -- Terenkripsi (Laravel Crypt/AES-256); TIDAK unik langsung karena ciphertext non-deterministik
+    nik_hash CHAR(64) UNIQUE NOT NULL, -- HMAC-SHA256(nik, APP_KEY) — dipakai untuk deduplikasi & pencarian tanpa dekripsi
     employee_nip VARCHAR(64) UNIQUE NOT NULL,
     department VARCHAR(128) NOT NULL,
     bank_name VARCHAR(64) NOT NULL,
-    bank_account_number VARCHAR(255) NOT NULL, -- Enkripsi PII
+    bank_account_number TEXT NOT NULL, -- Terenkripsi (Laravel Crypt)
     monthly_salary DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
     status VARCHAR(32) NOT NULL DEFAULT 'pending', -- pending, active, resigned, suspended
     joined_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE TABLE member_kyc (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    member_id UUID NOT NULL UNIQUE REFERENCES members(id) ON DELETE RESTRICT,
+    ktp_photo_path VARCHAR(255) NOT NULL, -- path privat di MinIO/S3, diakses via presigned URL (maks. 5 menit)
+    selfie_ktp_path VARCHAR(255) NOT NULL,
+    status VARCHAR(32) NOT NULL DEFAULT 'pending', -- pending, approved, rejected
+    rejection_reason VARCHAR(255),
+    verified_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    verified_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 ```
+
+> **Catatan implementasi (NIK)**: enkripsi standar (mis. `'nik' => 'encrypted'` di Eloquent) menghasilkan ciphertext acak per baris (IV berbeda setiap kali), sehingga `UNIQUE` langsung pada kolom terenkripsi **tidak berfungsi** untuk mendeteksi NIK duplikat. Solusinya, `nik` menyimpan ciphertext (untuk ditampilkan kembali via dekripsi), sedangkan `nik_hash` menyimpan digest HMAC deterministik dari NIK asli — kolom inilah yang diberi constraint `UNIQUE` dan dipakai untuk validasi "NIK sudah terdaftar" saat registrasi.
 
 ---
 
@@ -260,7 +316,8 @@ CREATE TABLE savings_accounts (
     status VARCHAR(32) NOT NULL DEFAULT 'active',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT chk_savings_balance_positive CHECK (balance >= 0)
+    CONSTRAINT chk_savings_balance_positive CHECK (balance >= 0),
+    CONSTRAINT uq_member_savings_type UNIQUE (member_id, type) -- satu anggota hanya punya 1 rekening per jenis (pokok/wajib/sukarela)
 );
 
 CREATE TABLE savings_transactions (
@@ -278,18 +335,60 @@ CREATE TABLE savings_transactions (
 
 ---
 
-### 2.3. Tabel `loans` & `loan_installments`
-Mengelola pinjaman anggota dan jadwal angsuran amortisasi:
+### 2.3. Tabel Pinjaman (`loan_products`, `loan_applications`, `loan_approvals`, `loans`, `loan_installments`)
+Mengelola produk pinjaman, alur pengajuan & persetujuan berjenjang, pinjaman aktif, dan jadwal angsuran amortisasi (BRD.md §5.3):
 
 ```sql
+CREATE TABLE loan_products (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(128) NOT NULL,
+    interest_type VARCHAR(16) NOT NULL, -- flat, sliding
+    annual_interest_rate DECIMAL(6, 4) NOT NULL, -- suku bunga TAHUNAN; dikonversi ÷12 saat kalkulasi bulanan (BRD.md §5.3.2)
+    min_tenor_months INTEGER NOT NULL,
+    max_tenor_months INTEGER NOT NULL,
+    max_ceiling_amount DECIMAL(15, 2) NOT NULL, -- plafon maksimal per-produk (independen dari plafon 3x simpanan per anggota)
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT chk_loan_tenor_positive CHECK (min_tenor_months > 0 AND max_tenor_months >= min_tenor_months)
+);
+
+CREATE TABLE loan_applications (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    member_id UUID NOT NULL REFERENCES members(id) ON DELETE RESTRICT,
+    loan_product_id UUID NOT NULL REFERENCES loan_products(id) ON DELETE RESTRICT,
+    application_number VARCHAR(32) UNIQUE NOT NULL, -- LON-20260914-123456
+    amount DECIMAL(15, 2) NOT NULL,
+    tenor_months INTEGER NOT NULL,
+    purpose VARCHAR(500) NOT NULL,
+    guarantee_type VARCHAR(32), -- payroll, bpjs, vehicle, property
+    status VARCHAR(32) NOT NULL DEFAULT 'pending_review', -- pending_review, approved, rejected
+    rejection_reason VARCHAR(255),
+    decided_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT chk_loan_application_amount_positive CHECK (amount > 0)
+);
+
+CREATE TABLE loan_approvals (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    loan_application_id UUID NOT NULL REFERENCES loan_applications(id) ON DELETE RESTRICT,
+    approver_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+    decision VARCHAR(16) NOT NULL, -- approved, rejected
+    notes VARCHAR(255),
+    decided_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_loan_application_approver UNIQUE (loan_application_id, approver_id) -- 1 approver = 1 keputusan per pengajuan
+);
+
 CREATE TABLE loans (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     member_id UUID NOT NULL REFERENCES members(id) ON DELETE RESTRICT,
+    loan_application_id UUID NOT NULL UNIQUE REFERENCES loan_applications(id) ON DELETE RESTRICT,
     loan_number VARCHAR(32) UNIQUE NOT NULL,
     principal_amount DECIMAL(15, 2) NOT NULL,
-    interest_rate DECIMAL(6, 4) NOT NULL, -- misal: 0.0080 (0.8% per bulan)
+    interest_rate DECIMAL(6, 4) NOT NULL, -- disalin dari loan_products.annual_interest_rate saat pencairan
     tenor_months INTEGER NOT NULL,
-    monthly_installment DECIMAL(15, 2) NOT NULL,
+    monthly_installment DECIMAL(15, 2) NOT NULL, -- representatif (angsuran bulan ke-1); rincian per bulan ada di loan_installments
     outstanding_balance DECIMAL(15, 2) NOT NULL,
     status VARCHAR(32) NOT NULL DEFAULT 'active', -- active, paid_off, defaulted
     disbursed_at TIMESTAMPTZ,
@@ -314,6 +413,8 @@ CREATE TABLE loan_installments (
 );
 ```
 
+> **Catatan persetujuan berjenjang**: jumlah keputusan `approved` yang dibutuhkan pada `loan_approvals` sebelum sebuah `loan_applications` boleh berpindah status menjadi `approved` bergantung pada nominal `amount` (BRD.md §5.3.3: ≤Rp5jt = 1 approval, Rp5jt–25jt = 2 approval, >Rp25jt = 2 approval khusus jenjang tertinggi — lihat `config('koperasi.loan.approval_tiers')`). Satu keputusan `rejected` langsung menolak seluruh pengajuan (veto tunggal), terlepas dari berapa banyak persetujuan yang sudah terkumpul.
+
 ---
 
 ### 2.4. Tabel Akuntansi Berpasangan (`chart_of_accounts`, `journal_entries`, `journal_lines`)
@@ -322,18 +423,20 @@ Menjamin kepatuhan standar pembukuan SAK EP dan auditabilitas finansial:
 ```sql
 CREATE TABLE chart_of_accounts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    code VARCHAR(32) UNIQUE NOT NULL, -- 1-1000 Kas, 1-1100 Bank, 1-1200 Piutang Pinjaman, dll.
+    code VARCHAR(32) UNIQUE NOT NULL, -- 1-1000 Kas, 1-1200 Piutang Pinjaman, 4-1000 Pendapatan Bunga Pinjaman, dll.
     name VARCHAR(128) NOT NULL,
     account_type VARCHAR(32) NOT NULL, -- asset, liability, equity, revenue, expense
     normal_balance VARCHAR(16) NOT NULL, -- debit, credit
-    is_active BOOLEAN NOT NULL DEFAULT TRUE
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE journal_entries (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     entry_number VARCHAR(64) UNIQUE NOT NULL, -- JRN-20260914-0001
     entry_date DATE NOT NULL,
-    reference_type VARCHAR(64), -- savings_transaction, loan, kopmart_order
+    reference_type VARCHAR(64), -- savings_transaction, loan, loan_installment, kopmart_order
     reference_id UUID,
     description TEXT NOT NULL,
     is_posted BOOLEAN NOT NULL DEFAULT TRUE,
