@@ -49,6 +49,9 @@ erDiagram
         string phone_number UK
         string password
         string transaction_pin_hash
+        text two_factor_secret
+        text two_factor_recovery_codes
+        timestamptz two_factor_confirmed_at
         string role
         boolean is_active
         timestamptz created_at
@@ -206,6 +209,19 @@ erDiagram
         string notes
     }
 
+    AUDIT_LOGS {
+        uuid id PK
+        uuid user_id FK
+        string event
+        string auditable_type
+        uuid auditable_id
+        string ip_address
+        string user_agent
+        jsonb old_values
+        jsonb new_values
+        timestamptz created_at
+    }
+
     RAT_SESSIONS {
         uuid id PK
         integer fiscal_year
@@ -261,6 +277,9 @@ CREATE TABLE users (
     phone_number VARCHAR(32) UNIQUE NOT NULL,
     password VARCHAR(255) NOT NULL,
     transaction_pin_hash VARCHAR(255),
+    two_factor_secret TEXT, -- terenkripsi; wajib diisi untuk role superadmin (rules/security.md §1)
+    two_factor_recovery_codes TEXT, -- terenkripsi; array JSON berisi hash bcrypt, sekali pakai
+    two_factor_confirmed_at TIMESTAMPTZ,
     role VARCHAR(32) NOT NULL DEFAULT 'member', -- member, treasurer, chairman, auditor, superadmin
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -488,6 +507,26 @@ CREATE TABLE rat_votes (
     signature_hash VARCHAR(255) NOT NULL, -- Hash pengaman integritas suara
     voted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT uq_member_agenda_vote UNIQUE (rat_agenda_id, member_id)
+);
+```
+
+---
+
+### 2.6. Tabel Jejak Audit (`audit_logs`)
+Jejak audit mutlak untuk setiap aksi finansial & administratif (rules/security.md §3.1) — tidak dapat diubah atau dihapus setelah dicatat:
+
+```sql
+CREATE TABLE audit_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id) ON DELETE SET NULL, -- NULL untuk aksi sistem otomatis (mis. pencairan pinjaman)
+    event VARCHAR(128) NOT NULL, -- mis. member.kyc_approved, loan.disbursed, admin.login_succeeded
+    auditable_type VARCHAR(128), -- kelas model terkait (polymorphic)
+    auditable_id UUID,
+    ip_address VARCHAR(45),
+    user_agent TEXT,
+    old_values JSONB,
+    new_values JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 ```
 

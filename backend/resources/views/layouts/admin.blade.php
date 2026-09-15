@@ -20,6 +20,9 @@
                 <a href="{{ route('admin.members.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 {{ request()->routeIs('admin.members.*') ? 'bg-white/15 font-semibold' : '' }}">Anggota</a>
                 <a href="{{ route('admin.kyc.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 {{ request()->routeIs('admin.kyc.*') ? 'bg-white/15 font-semibold' : '' }}">Verifikasi KYC</a>
                 <a href="{{ route('admin.loans.applications.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 {{ request()->routeIs('admin.loans.*') ? 'bg-white/15 font-semibold' : '' }}">Persetujuan Pinjaman</a>
+                @if (in_array(auth()->user()?->role?->value, ['auditor', 'superadmin'], true))
+                    <a href="{{ route('admin.audit-logs.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 {{ request()->routeIs('admin.audit-logs.*') ? 'bg-white/15 font-semibold' : '' }}">Log Audit</a>
+                @endif
             </nav>
             <div class="px-4 py-4 border-t border-white/10">
                 <p class="text-xs text-white/70 truncate">{{ auth()->user()?->name }}</p>

@@ -6,6 +6,7 @@ use App\Enums\SavingsType;
 use App\Enums\UserRole;
 use App\Models\Member;
 use App\Models\User;
+use App\Services\Security\TwoFactorAuthenticationService;
 use Database\Seeders\ChartOfAccountsSeeder;
 use Database\Seeders\LoanProductSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -104,4 +105,21 @@ function activeMemberWithSavings(float $totalSavingsSukarela = 5_000_000, float 
     ]);
 
     return $member->refresh();
+}
+
+/**
+ * Mengaktifkan 2FA untuk user tanpa melewati alur setup UI (dipakai untuk
+ * menguji tantangan login/step-up). Mengembalikan secret mentah agar test
+ * bisa menghasilkan kode OTP valid via Google2FA::getCurrentOtp().
+ */
+function enableTwoFactorFor(User $user): string
+{
+    $secret = app(TwoFactorAuthenticationService::class)->generateSecretKey();
+
+    $user->forceFill([
+        'two_factor_secret' => $secret,
+        'two_factor_confirmed_at' => now(),
+    ])->save();
+
+    return $secret;
 }

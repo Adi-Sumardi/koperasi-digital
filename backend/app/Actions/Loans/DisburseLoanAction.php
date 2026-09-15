@@ -8,6 +8,7 @@ use App\Enums\LoanStatus;
 use App\Events\Loans\LoanDisbursedEvent;
 use App\Models\Loan;
 use App\Models\LoanApplication;
+use App\Services\Audit\AuditLogger;
 use App\Services\Loans\LoanCalculationService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -16,6 +17,7 @@ class DisburseLoanAction
 {
     public function __construct(
         private readonly LoanCalculationService $calculator,
+        private readonly AuditLogger $auditLogger,
     ) {}
 
     public function execute(LoanApplication $application): Loan
@@ -53,6 +55,18 @@ class DisburseLoanAction
                     'total_installment' => $line->totalInstallment,
                 ]);
             }
+
+            $this->auditLogger->log(
+                event: 'loan.disbursed',
+                actor: null, // dipicu otomatis begitu jenjang persetujuan terpenuhi, bukan aksi satu orang
+                subject: $loan,
+                new: [
+                    'loan_number' => $loan->loan_number,
+                    'principal_amount' => $amount,
+                    'tenor_months' => $application->tenor_months,
+                    'loan_application_id' => $application->id,
+                ],
+            );
 
             LoanDisbursedEvent::dispatch($loan);
 

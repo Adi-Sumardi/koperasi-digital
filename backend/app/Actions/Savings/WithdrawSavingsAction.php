@@ -11,11 +11,16 @@ use App\Exceptions\InsufficientBalanceException;
 use App\Models\Member;
 use App\Models\SavingsAccount;
 use App\Models\SavingsTransaction;
+use App\Services\Audit\AuditLogger;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class WithdrawSavingsAction
 {
+    public function __construct(
+        private readonly AuditLogger $auditLogger,
+    ) {}
+
     public function execute(Member $member, float $amount): SavingsTransaction
     {
         return DB::transaction(function () use ($member, $amount) {
@@ -38,6 +43,13 @@ class WithdrawSavingsAction
                 'amount' => $amount,
                 'balance_after' => $account->balance,
             ]);
+
+            $this->auditLogger->log(
+                event: 'savings.withdrawn',
+                actor: $member->user,
+                subject: $account,
+                new: ['type' => SavingsType::SUKARELA->value, 'amount' => $amount, 'balance_after' => (float) $account->balance],
+            );
 
             SavingsWithdrawnEvent::dispatch($transaction);
 

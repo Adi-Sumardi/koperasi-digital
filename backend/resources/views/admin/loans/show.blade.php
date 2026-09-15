@@ -57,9 +57,19 @@
             @elseif (! $eligible)
                 <p class="text-sm text-on-surface-variant">Peran Anda tidak berwenang memutuskan pengajuan pada jenjang nominal ini.</p>
             @else
+                @if ($tier->requiresTwoFactor)
+                    <p class="text-xs text-warning bg-warning-container rounded-lg px-3 py-2 mb-3">
+                        Pengajuan bernilai besar — persetujuan wajib disertai kode 2FA.
+                    </p>
+                @endif
+
                 <form method="POST" action="{{ route('admin.loans.applications.decide', $application) }}" class="space-y-2 mb-3">
                     @csrf
                     <input type="hidden" name="decision" value="approved">
+                    @if ($tier->requiresTwoFactor)
+                        <input type="text" name="totp_code" inputmode="numeric" maxlength="6" required placeholder="Kode 2FA (6 digit)"
+                            class="w-full rounded-lg border border-outline px-3 py-2 text-sm tracking-widest focus:outline-none focus:ring-2 focus:ring-secondary">
+                    @endif
                     <button type="submit" class="w-full bg-success text-white rounded-lg py-2.5 text-sm font-semibold hover:opacity-90 transition">
                         Setujui
                     </button>

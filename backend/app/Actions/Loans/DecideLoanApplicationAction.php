@@ -9,6 +9,7 @@ use App\Enums\LoanApprovalDecision;
 use App\Exceptions\LoanWorkflowException;
 use App\Models\LoanApplication;
 use App\Models\User;
+use App\Services\Audit\AuditLogger;
 use App\Services\Loans\LoanApprovalTierService;
 use Illuminate\Support\Facades\DB;
 
@@ -17,6 +18,7 @@ class DecideLoanApplicationAction
     public function __construct(
         private readonly LoanApprovalTierService $tierService,
         private readonly DisburseLoanAction $disburse,
+        private readonly AuditLogger $auditLogger,
     ) {}
 
     public function execute(
@@ -42,11 +44,18 @@ class DecideLoanApplicationAction
                 throw new LoanWorkflowException('Anda sudah memberikan keputusan untuk pengajuan ini.');
             }
 
-            $application->approvals()->create([
+            $approval = $application->approvals()->create([
                 'approver_id' => $approver->id,
                 'decision' => $decision,
                 'notes' => $notes,
             ]);
+
+            $this->auditLogger->log(
+                event: 'loan_application.decision_recorded',
+                actor: $approver,
+                subject: $approval,
+                new: ['decision' => $decision->value, 'notes' => $notes, 'loan_application_id' => $application->id],
+            );
 
             if ($decision === LoanApprovalDecision::REJECTED) {
                 $application->update([
@@ -54,6 +63,14 @@ class DecideLoanApplicationAction
                     'rejection_reason' => $notes,
                     'decided_at' => now(),
                 ]);
+
+                $this->auditLogger->log(
+                    event: 'loan_application.rejected',
+                    actor: $approver,
+                    subject: $application,
+                    old: ['status' => LoanApplicationStatus::PENDING_REVIEW->value],
+                    new: ['status' => LoanApplicationStatus::REJECTED->value, 'reason' => $notes],
+                );
 
                 return $application;
             }

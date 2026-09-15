@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="id">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Verifikasi 2FA — Portal Pengurus Koperasi Digital</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    @vite(['resources/css/app.css'])
+</head>
+<body class="bg-primary-container min-h-screen flex items-center justify-center p-6 font-data">
+    <div class="w-full max-w-sm bg-surface rounded-2xl shadow-xl p-8">
+        <p class="font-heading font-bold text-2xl text-on-surface">Verifikasi Dua Langkah</p>
+        <p class="text-sm text-on-surface-variant mt-1 mb-6">Masukkan kode 6 digit dari aplikasi authenticator Anda, atau salah satu kode pemulihan.</p>
+
+        @if ($errors->any())
+            <div class="rounded-lg bg-error-container text-error px-4 py-3 text-sm font-medium mb-4">
+                @foreach ($errors->all() as $error)
+                    <p>{{ $error }}</p>
+                @endforeach
+            </div>
+        @endif
+
+        <form method="POST" action="{{ route('admin.2fa.challenge.store') }}" class="space-y-4">
+            @csrf
+            <div>
+                <label for="code" class="block text-sm font-medium text-on-surface-variant mb-1">Kode</label>
+                <input id="code" name="code" type="text" maxlength="32" required autofocus
+                    class="w-full rounded-lg border border-outline px-3 py-2 text-sm tracking-widest focus:outline-none focus:ring-2 focus:ring-secondary">
+            </div>
+            <button type="submit"
+                class="w-full bg-primary text-white rounded-lg py-2.5 text-sm font-semibold hover:bg-primary-container transition">
+                Verifikasi
+            </button>
+        </form>
+    </div>
+</body>
+</html>

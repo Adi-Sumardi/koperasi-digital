@@ -2,7 +2,10 @@
 
 declare(strict_types=1);
 
+use App\Http\Controllers\Web\Admin\Audit\AuditLogController;
 use App\Http\Controllers\Web\Admin\Auth\LoginController;
+use App\Http\Controllers\Web\Admin\Auth\TwoFactorChallengeController;
+use App\Http\Controllers\Web\Admin\Auth\TwoFactorSetupController;
 use App\Http\Controllers\Web\Admin\DashboardController;
 use App\Http\Controllers\Web\Admin\Kyc\ApproveKycController;
 use App\Http\Controllers\Web\Admin\Kyc\KycReviewController;
@@ -17,7 +20,14 @@ Route::redirect('/', '/admin');
 Route::prefix('admin')->name('admin.')->group(function () {
     Route::middleware('guest:web')->group(function () {
         Route::get('login', [LoginController::class, 'create'])->name('login');
-        Route::post('login', [LoginController::class, 'store'])->name('login.store');
+        Route::post('login', [LoginController::class, 'store'])->middleware('throttle:6,1')->name('login.store');
+
+        Route::prefix('2fa')->name('2fa.')->group(function () {
+            Route::get('setup', [TwoFactorSetupController::class, 'create'])->name('setup');
+            Route::post('setup', [TwoFactorSetupController::class, 'store'])->middleware('throttle:6,1')->name('setup.store');
+            Route::get('challenge', [TwoFactorChallengeController::class, 'create'])->name('challenge');
+            Route::post('challenge', [TwoFactorChallengeController::class, 'store'])->middleware('throttle:6,1')->name('challenge.store');
+        });
     });
 
     Route::middleware(['auth:web', 'admin.role'])->group(function () {
@@ -42,5 +52,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/', [MemberController::class, 'index'])->name('index');
             Route::get('{member}', [MemberController::class, 'show'])->name('show');
         });
+
+        Route::middleware('admin.role:auditor,superadmin')
+            ->get('audit-logs', [AuditLogController::class, 'index'])
+            ->name('audit-logs.index');
     });
 });

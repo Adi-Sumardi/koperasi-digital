@@ -7,6 +7,7 @@ use App\Enums\LoanApplicationStatus;
 use App\Enums\UserRole;
 use App\Models\LoanApplication;
 use App\Models\LoanProduct;
+use PragmaRX\Google2FA\Google2FA;
 
 function pendingApplication(float $amount = 2_000_000, int $tenorMonths = 6): LoanApplication
 {
@@ -97,13 +98,55 @@ it('flashes an error instead of crashing when the wrong role tries to decide a h
     $application = pendingApplication(30_000_000, 24);
     $treasurer = adminUser(UserRole::TREASURER); // tier >25jt requires chairman/superadmin only
 
+    // 2FA valid disiapkan supaya penolakan yang diuji murni berbasis role, bukan syarat 2FA.
+    $secret = enableTwoFactorFor($treasurer);
+    $code = app(Google2FA::class)->getCurrentOtp($secret);
+
     $response = $this->actingAs($treasurer, 'web')
-        ->post("/admin/loans/applications/{$application->id}/decide", ['decision' => 'approved']);
+        ->post("/admin/loans/applications/{$application->id}/decide", ['decision' => 'approved', 'totp_code' => $code]);
 
     $response->assertRedirect();
     $response->assertSessionHasErrors('error');
 
     expect($application->refresh()->status)->toBe(LoanApplicationStatus::PENDING_REVIEW);
+});
+
+it('requires a valid 2fa code to approve a high-tier loan application', function () {
+    $application = pendingApplication(30_000_000, 24);
+    $chairman = adminUser(UserRole::CHAIRMAN);
+
+    $withoutCode = $this->actingAs($chairman, 'web')
+        ->post("/admin/loans/applications/{$application->id}/decide", ['decision' => 'approved']);
+    $withoutCode->assertSessionHasErrors('totp_code');
+    expect($application->refresh()->status)->toBe(LoanApplicationStatus::PENDING_REVIEW);
+
+    $secret = enableTwoFactorFor($chairman);
+
+    $wrongCode = $this->actingAs($chairman, 'web')
+        ->post("/admin/loans/applications/{$application->id}/decide", ['decision' => 'approved', 'totp_code' => '000000']);
+    $wrongCode->assertSessionHasErrors('totp_code');
+    expect($application->refresh()->status)->toBe(LoanApplicationStatus::PENDING_REVIEW);
+
+    $code = app(Google2FA::class)->getCurrentOtp($secret);
+    $success = $this->actingAs($chairman, 'web')
+        ->post("/admin/loans/applications/{$application->id}/decide", ['decision' => 'approved', 'totp_code' => $code]);
+    $success->assertRedirect()->assertSessionDoesntHaveErrors();
+
+    // Tier >Rp25jt butuh 2 approval — satu approval chairman yang valid tercatat,
+    // tapi pengajuan belum pindah status sampai jenjang terpenuhi (lihat test tier-2).
+    expect($application->approvals()->where('approver_id', $chairman->id)->exists())->toBeTrue()
+        ->and($application->refresh()->status)->toBe(LoanApplicationStatus::PENDING_REVIEW);
+});
+
+it('does not require a 2fa code to reject a high-tier loan application', function () {
+    $application = pendingApplication(30_000_000, 24);
+    $chairman = adminUser(UserRole::CHAIRMAN);
+
+    $response = $this->actingAs($chairman, 'web')
+        ->post("/admin/loans/applications/{$application->id}/decide", ['decision' => 'rejected', 'notes' => 'Tidak sesuai']);
+
+    $response->assertRedirect();
+    expect($application->refresh()->status)->toBe(LoanApplicationStatus::REJECTED);
 });
 
 it('forbids a member from accessing loan application review', function () {

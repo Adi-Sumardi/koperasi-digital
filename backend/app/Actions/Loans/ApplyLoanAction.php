@@ -9,6 +9,7 @@ use App\Exceptions\LoanWorkflowException;
 use App\Models\LoanApplication;
 use App\Models\LoanProduct;
 use App\Models\Member;
+use App\Services\Audit\AuditLogger;
 use App\Services\Loans\LoanEligibilityService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -18,6 +19,7 @@ class ApplyLoanAction
     public function __construct(
         private readonly SimulateLoanAction $simulate,
         private readonly LoanEligibilityService $eligibility,
+        private readonly AuditLogger $auditLogger,
     ) {}
 
     public function execute(
@@ -47,16 +49,27 @@ class ApplyLoanAction
             );
         }
 
-        return DB::transaction(fn () => LoanApplication::create([
-            'member_id' => $member->id,
-            'loan_product_id' => $product->id,
-            'application_number' => $this->generateApplicationNumber(),
-            'amount' => $amount,
-            'tenor_months' => $tenorMonths,
-            'purpose' => $purpose,
-            'guarantee_type' => $guaranteeType,
-            'status' => LoanApplicationStatus::PENDING_REVIEW,
-        ]));
+        return DB::transaction(function () use ($member, $product, $amount, $tenorMonths, $purpose, $guaranteeType) {
+            $application = LoanApplication::create([
+                'member_id' => $member->id,
+                'loan_product_id' => $product->id,
+                'application_number' => $this->generateApplicationNumber(),
+                'amount' => $amount,
+                'tenor_months' => $tenorMonths,
+                'purpose' => $purpose,
+                'guarantee_type' => $guaranteeType,
+                'status' => LoanApplicationStatus::PENDING_REVIEW,
+            ]);
+
+            $this->auditLogger->log(
+                event: 'loan_application.submitted',
+                actor: $member->user,
+                subject: $application,
+                new: ['amount' => $amount, 'tenor_months' => $tenorMonths, 'product' => $product->name],
+            );
+
+            return $application;
+        });
     }
 
     private function generateApplicationNumber(): string

@@ -11,6 +11,7 @@ use App\Events\Savings\SavingsDepositedEvent;
 use App\Models\Member;
 use App\Models\SavingsAccount;
 use App\Models\SavingsTransaction;
+use App\Services\Audit\AuditLogger;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -18,6 +19,7 @@ class DepositSavingsAction
 {
     public function __construct(
         private readonly ActivateMembershipAction $activateMembership,
+        private readonly AuditLogger $auditLogger,
     ) {}
 
     public function execute(Member $member, SavingsType $type, float $amount): SavingsTransaction
@@ -42,6 +44,13 @@ class DepositSavingsAction
             if ($type === SavingsType::POKOK) {
                 $this->activateMembership->activateIfEligible($member->refresh());
             }
+
+            $this->auditLogger->log(
+                event: 'savings.deposited',
+                actor: $member->user,
+                subject: $account,
+                new: ['type' => $type->value, 'amount' => $amount, 'balance_after' => (float) $account->balance],
+            );
 
             SavingsDepositedEvent::dispatch($transaction);
 

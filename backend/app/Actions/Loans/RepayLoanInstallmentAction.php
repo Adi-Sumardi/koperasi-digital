@@ -10,10 +10,15 @@ use App\Events\Loans\LoanInstallmentRepaidEvent;
 use App\Exceptions\LoanWorkflowException;
 use App\Models\Loan;
 use App\Models\LoanInstallment;
+use App\Services\Audit\AuditLogger;
 use Illuminate\Support\Facades\DB;
 
 class RepayLoanInstallmentAction
 {
+    public function __construct(
+        private readonly AuditLogger $auditLogger,
+    ) {}
+
     /**
      * Melunasi angsuran jatuh tempo berikutnya secara penuh (simulasi — belum ada
      * integrasi payroll cut/VA sungguhan).
@@ -51,9 +56,22 @@ class RepayLoanInstallmentAction
                 $loan->update(['status' => LoanStatus::PAID_OFF]);
             }
 
-            LoanInstallmentRepaidEvent::dispatch($installment->fresh());
+            $paidInstallment = $installment->fresh();
 
-            return $installment->fresh();
+            $this->auditLogger->log(
+                event: 'loan.repaid',
+                actor: $loan->member->user,
+                subject: $paidInstallment,
+                new: [
+                    'installment_number' => $paidInstallment->installment_number,
+                    'amount' => (float) $paidInstallment->paid_amount,
+                    'loan_id' => $loan->id,
+                ],
+            );
+
+            LoanInstallmentRepaidEvent::dispatch($paidInstallment);
+
+            return $paidInstallment;
         });
     }
 }

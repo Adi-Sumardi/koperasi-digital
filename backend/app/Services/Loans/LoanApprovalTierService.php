@@ -20,6 +20,7 @@ class LoanApprovalTierService
                 return new LoanApprovalTier(
                     requiredApprovals: $tier['required_approvals'],
                     roles: $tier['roles'],
+                    requiresTwoFactor: $tier['max_amount'] === null,
                 );
             }
         }
@@ -27,6 +28,6 @@ class LoanApprovalTierService
         // Tidak akan pernah tercapai selama tier terakhir memiliki max_amount = null.
         $last = end($tiers);
 
-        return new LoanApprovalTier($last['required_approvals'], $last['roles']);
+        return new LoanApprovalTier($last['required_approvals'], $last['roles'], requiresTwoFactor: true);
     }
 }

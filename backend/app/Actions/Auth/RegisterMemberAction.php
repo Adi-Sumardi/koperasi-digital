@@ -9,12 +9,14 @@ use App\Enums\MemberStatus;
 use App\Enums\UserRole;
 use App\Models\Member;
 use App\Models\User;
+use App\Services\Audit\AuditLogger;
 use Illuminate\Support\Facades\DB;
 
 class RegisterMemberAction
 {
     public function __construct(
         private readonly CreateMemberSavingsAccountsAction $createSavingsAccounts,
+        private readonly AuditLogger $auditLogger,
     ) {}
 
     /**
@@ -43,6 +45,13 @@ class RegisterMemberAction
             ]);
 
             $this->createSavingsAccounts->execute($member);
+
+            $this->auditLogger->log(
+                event: 'member.registered',
+                actor: $user,
+                subject: $member,
+                new: ['full_name' => $member->full_name, 'employee_nip' => $member->employee_nip],
+            );
 
             return $member;
         });
