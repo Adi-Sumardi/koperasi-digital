@@ -27,7 +27,8 @@
             <div class="px-4 py-4 border-t border-white/10">
                 <p class="text-xs text-white/70 truncate">{{ auth()->user()?->name }}</p>
                 <p class="text-[11px] text-white/50 uppercase tracking-wide">{{ auth()->user()?->role?->value }}</p>
-                <form method="POST" action="{{ route('admin.logout') }}" class="mt-2">
+                <a href="{{ route('admin.settings.security.index') }}" class="block mt-2 text-xs {{ request()->routeIs('admin.settings.*') ? 'text-white font-semibold' : 'text-white/80 hover:text-white' }}">Keamanan Akun</a>
+                <form method="POST" action="{{ route('admin.logout') }}" class="mt-1">
                     @csrf
                     <button type="submit" class="text-xs text-white/80 hover:text-white underline">Keluar</button>
                 </form>

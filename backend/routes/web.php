@@ -13,6 +13,8 @@ use App\Http\Controllers\Web\Admin\Kyc\RejectKycController;
 use App\Http\Controllers\Web\Admin\Loans\DecideLoanApplicationController;
 use App\Http\Controllers\Web\Admin\Loans\LoanApplicationReviewController;
 use App\Http\Controllers\Web\Admin\Members\MemberController;
+use App\Http\Controllers\Web\Admin\Settings\SecuritySettingsController;
+use App\Http\Controllers\Web\Admin\Settings\TwoFactorSettingsController;
 use Illuminate\Support\Facades\Route;
 
 Route::redirect('/', '/admin');
@@ -56,5 +58,12 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::middleware('admin.role:auditor,superadmin')
             ->get('audit-logs', [AuditLogController::class, 'index'])
             ->name('audit-logs.index');
+
+        Route::prefix('settings/security')->name('settings.security.')->group(function () {
+            Route::get('/', [SecuritySettingsController::class, 'index'])->name('index');
+            Route::get('2fa/enable', [TwoFactorSettingsController::class, 'create'])->name('2fa.enable');
+            Route::post('2fa/enable', [TwoFactorSettingsController::class, 'store'])->name('2fa.enable.store');
+            Route::post('2fa/disable', [TwoFactorSettingsController::class, 'destroy'])->name('2fa.disable');
+        });
     });
 });

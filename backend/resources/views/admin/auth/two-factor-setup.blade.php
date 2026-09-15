@@ -31,7 +31,7 @@
         <p class="text-xs text-on-surface-variant mb-1">Tidak bisa memindai? Masukkan kunci ini secara manual:</p>
         <p class="font-data text-sm text-on-surface bg-surface-variant rounded-lg px-3 py-2 mb-4 break-all">{{ $secret }}</p>
 
-        <form method="POST" action="{{ route('admin.2fa.setup.store') }}" class="space-y-4">
+        <form method="POST" action="{{ $confirmRoute ?? route('admin.2fa.setup.store') }}" class="space-y-4">
             @csrf
             <div>
                 <label for="code" class="block text-sm font-medium text-on-surface-variant mb-1">Kode Verifikasi</label>

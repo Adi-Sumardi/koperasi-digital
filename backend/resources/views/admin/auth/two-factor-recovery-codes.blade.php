@@ -23,9 +23,9 @@
             @endforeach
         </div>
 
-        <a href="{{ route('admin.dashboard') }}"
+        <a href="{{ $continueUrl ?? route('admin.dashboard') }}"
             class="block text-center w-full bg-primary text-white rounded-lg py-2.5 text-sm font-semibold hover:bg-primary-container transition">
-            Sudah Disimpan, Lanjut ke Dasbor
+            {{ $continueLabel ?? 'Sudah Disimpan, Lanjut ke Dasbor' }}
         </a>
     </div>
 </body>
