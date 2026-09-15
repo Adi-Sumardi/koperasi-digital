@@ -6,12 +6,18 @@ namespace App\Services\Accounting;
 
 use App\Models\ChartOfAccount;
 use App\Models\JournalEntry;
+use App\Models\Loan;
+use App\Models\LoanInstallment;
 use App\Models\SavingsTransaction;
 use Illuminate\Support\Str;
 
 class JournalPostingService
 {
     private const KAS_ACCOUNT_CODE = '1-1000';
+
+    private const PIUTANG_PINJAMAN_ACCOUNT_CODE = '1-1200';
+
+    private const PENDAPATAN_BUNGA_ACCOUNT_CODE = '4-1000';
 
     private const SAVINGS_LIABILITY_CODES = [
         'pokok' => '2-1001',
@@ -26,13 +32,14 @@ class JournalPostingService
     {
         $account = $transaction->savingsAccount;
 
-        return $this->postBalancedEntry(
+        return $this->postEntry(
             description: "Setoran {$account->type->label()} — {$transaction->reference_no}",
             referenceType: 'savings_transaction',
             referenceId: $transaction->id,
-            debitAccountCode: self::KAS_ACCOUNT_CODE,
-            creditAccountCode: self::SAVINGS_LIABILITY_CODES[$account->type->value],
-            amount: (float) $transaction->amount,
+            lines: [
+                ['code' => self::KAS_ACCOUNT_CODE, 'debit' => (float) $transaction->amount, 'credit' => 0],
+                ['code' => self::SAVINGS_LIABILITY_CODES[$account->type->value], 'debit' => 0, 'credit' => (float) $transaction->amount],
+            ],
         );
     }
 
@@ -43,27 +50,61 @@ class JournalPostingService
     {
         $account = $transaction->savingsAccount;
 
-        return $this->postBalancedEntry(
+        return $this->postEntry(
             description: "Penarikan {$account->type->label()} — {$transaction->reference_no}",
             referenceType: 'savings_transaction',
             referenceId: $transaction->id,
-            debitAccountCode: self::SAVINGS_LIABILITY_CODES[$account->type->value],
-            creditAccountCode: self::KAS_ACCOUNT_CODE,
-            amount: (float) $transaction->amount,
+            lines: [
+                ['code' => self::SAVINGS_LIABILITY_CODES[$account->type->value], 'debit' => (float) $transaction->amount, 'credit' => 0],
+                ['code' => self::KAS_ACCOUNT_CODE, 'debit' => 0, 'credit' => (float) $transaction->amount],
+            ],
         );
     }
 
-    private function postBalancedEntry(
-        string $description,
-        string $referenceType,
-        string $referenceId,
-        string $debitAccountCode,
-        string $creditAccountCode,
-        float $amount,
-    ): JournalEntry {
-        $debitAccount = ChartOfAccount::where('code', $debitAccountCode)->firstOrFail();
-        $creditAccount = ChartOfAccount::where('code', $creditAccountCode)->firstOrFail();
+    /**
+     * Pencairan pinjaman: Debit Piutang Pinjaman, Kredit Kas.
+     */
+    public function recordLoanDisbursement(Loan $loan): JournalEntry
+    {
+        return $this->postEntry(
+            description: "Pencairan Pinjaman — {$loan->loan_number}",
+            referenceType: 'loan',
+            referenceId: $loan->id,
+            lines: [
+                ['code' => self::PIUTANG_PINJAMAN_ACCOUNT_CODE, 'debit' => (float) $loan->principal_amount, 'credit' => 0],
+                ['code' => self::KAS_ACCOUNT_CODE, 'debit' => 0, 'credit' => (float) $loan->principal_amount],
+            ],
+        );
+    }
 
+    /**
+     * Pembayaran angsuran: Debit Kas (total dibayar), Kredit Piutang Pinjaman (porsi
+     * pokok) & Kredit Pendapatan Bunga Pinjaman (porsi bunga).
+     */
+    public function recordLoanRepayment(LoanInstallment $installment): JournalEntry
+    {
+        $lines = [
+            ['code' => self::KAS_ACCOUNT_CODE, 'debit' => (float) $installment->paid_amount, 'credit' => 0],
+            ['code' => self::PIUTANG_PINJAMAN_ACCOUNT_CODE, 'debit' => 0, 'credit' => (float) $installment->principal_portion],
+        ];
+
+        if ((float) $installment->interest_portion > 0) {
+            $lines[] = ['code' => self::PENDAPATAN_BUNGA_ACCOUNT_CODE, 'debit' => 0, 'credit' => (float) $installment->interest_portion];
+        }
+
+        return $this->postEntry(
+            description: "Pembayaran Angsuran #{$installment->installment_number} — {$installment->loan->loan_number}",
+            referenceType: 'loan_installment',
+            referenceId: $installment->id,
+            lines: $lines,
+        );
+    }
+
+    /**
+     * @param  array<int, array{code: string, debit: float, credit: float}>  $lines
+     */
+    private function postEntry(string $description, string $referenceType, string $referenceId, array $lines): JournalEntry
+    {
         $entry = JournalEntry::create([
             'entry_number' => $this->generateEntryNumber(),
             'entry_date' => now()->toDateString(),
@@ -73,19 +114,17 @@ class JournalPostingService
             'is_posted' => true,
         ]);
 
-        // Kedua baris disisipkan dalam transaksi DB yang sama (lihat pemanggil di listener);
-        // trigger keseimbangan debit=kredit divalidasi DEFERRED, saat COMMIT.
-        $entry->lines()->create([
-            'account_id' => $debitAccount->id,
-            'debit' => $amount,
-            'credit' => 0,
-        ]);
+        // Seluruh baris disisipkan dalam transaksi DB yang sama (lihat pemanggil di
+        // listener); trigger keseimbangan debit=kredit divalidasi DEFERRED, saat COMMIT.
+        foreach ($lines as $line) {
+            $account = ChartOfAccount::where('code', $line['code'])->firstOrFail();
 
-        $entry->lines()->create([
-            'account_id' => $creditAccount->id,
-            'debit' => 0,
-            'credit' => $amount,
-        ]);
+            $entry->lines()->create([
+                'account_id' => $account->id,
+                'debit' => $line['debit'],
+                'credit' => $line['credit'],
+            ]);
+        }
 
         return $entry;
     }

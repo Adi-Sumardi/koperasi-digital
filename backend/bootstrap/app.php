@@ -2,6 +2,7 @@
 
 use App\Exceptions\FinancialImmutableException;
 use App\Exceptions\InsufficientBalanceException;
+use App\Exceptions\LoanWorkflowException;
 use App\Http\Middleware\EnsureIdempotencyKey;
 use App\Support\ApiResponse;
 use Illuminate\Foundation\Application;
@@ -37,5 +38,11 @@ return Application::configure(basePath: dirname(__DIR__))
             message: $e->getMessage(),
             code: 'FINANCIAL_RECORD_IMMUTABLE',
             status: Response::HTTP_CONFLICT,
+        ));
+
+        $exceptions->render(fn (LoanWorkflowException $e) => ApiResponse::error(
+            message: $e->getMessage(),
+            code: 'LOAN_WORKFLOW_VIOLATION',
+            status: Response::HTTP_BAD_REQUEST,
         ));
     })->create();

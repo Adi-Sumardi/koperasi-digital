@@ -75,6 +75,21 @@ class Member extends Model
         return $this->hasMany(SavingsAccount::class);
     }
 
+    public function loanApplications(): HasMany
+    {
+        return $this->hasMany(LoanApplication::class);
+    }
+
+    public function loans(): HasMany
+    {
+        return $this->hasMany(Loan::class);
+    }
+
+    public function totalSavingsBalance(): float
+    {
+        return (float) $this->savingsAccounts()->sum('balance');
+    }
+
     public function isActive(): bool
     {
         return $this->status === MemberStatus::ACTIVE;

@@ -1,9 +1,12 @@
 <?php
 
 use App\Actions\Savings\CreateMemberSavingsAccountsAction;
+use App\Enums\KycStatus;
+use App\Enums\SavingsType;
 use App\Models\Member;
 use App\Models\User;
 use Database\Seeders\ChartOfAccountsSeeder;
+use Database\Seeders\LoanProductSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -27,6 +30,10 @@ pest()->extend(TestCase::class)
 uses()
     ->beforeEach(fn () => test()->seed(ChartOfAccountsSeeder::class))
     ->in('Feature/Savings');
+
+uses()
+    ->beforeEach(fn () => test()->seed([ChartOfAccountsSeeder::class, LoanProductSeeder::class]))
+    ->in('Feature/Loans');
 
 /*
 |--------------------------------------------------------------------------
@@ -64,6 +71,27 @@ function memberWithSavingsAccounts(): Member
     $member = Member::factory()->for(User::factory())->create();
 
     app(CreateMemberSavingsAccountsAction::class)->execute($member);
+
+    return $member->refresh();
+}
+
+/**
+ * Anggota AKTIF dengan saldo simpanan & gaji tertentu, siap untuk pengajuan pinjaman.
+ */
+function activeMemberWithSavings(float $totalSavingsSukarela = 5_000_000, float $monthlySalary = 10_000_000): Member
+{
+    $member = Member::factory()->active()->create(['monthly_salary' => $monthlySalary]);
+
+    app(CreateMemberSavingsAccountsAction::class)->execute($member);
+
+    $member->savingsAccounts()->where('type', SavingsType::SUKARELA)->update(['balance' => $totalSavingsSukarela]);
+
+    $member->kyc()->create([
+        'ktp_photo_path' => 'kyc/test/ktp.jpg',
+        'selfie_ktp_path' => 'kyc/test/selfie.jpg',
+        'status' => KycStatus::APPROVED,
+        'verified_at' => now(),
+    ]);
 
     return $member->refresh();
 }
