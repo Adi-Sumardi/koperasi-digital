@@ -94,4 +94,23 @@ class Member extends Model
     {
         return $this->status === MemberStatus::ACTIVE;
     }
+
+    /**
+     * Format tampilan tersamar NIK, mis. "3201 0420 •••• 0005" (rules/formatting.md §3.2).
+     */
+    public function maskedNik(): string
+    {
+        $nik = $this->nik;
+
+        if ($nik === null || strlen($nik) !== 16) {
+            return '—';
+        }
+
+        return sprintf(
+            '%s %s •••• %s',
+            substr($nik, 0, 4),
+            substr($nik, 4, 4),
+            substr($nik, 12, 4),
+        );
+    }
 }

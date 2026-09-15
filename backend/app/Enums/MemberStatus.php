@@ -10,4 +10,14 @@ enum MemberStatus: string
     case ACTIVE = 'active';
     case RESIGNED = 'resigned';
     case SUSPENDED = 'suspended';
+
+    public function label(): string
+    {
+        return match ($this) {
+            self::PENDING => 'Menunggu Aktivasi',
+            self::ACTIVE => 'Aktif',
+            self::RESIGNED => 'Mengundurkan Diri',
+            self::SUSPENDED => 'Ditangguhkan',
+        };
+    }
 }

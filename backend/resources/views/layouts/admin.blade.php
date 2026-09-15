@@ -17,6 +17,7 @@
             </div>
             <nav class="flex-1 px-3 py-4 space-y-1 text-sm">
                 <a href="{{ route('admin.dashboard') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 {{ request()->routeIs('admin.dashboard') ? 'bg-white/15 font-semibold' : '' }}">Dasbor</a>
+                <a href="{{ route('admin.members.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 {{ request()->routeIs('admin.members.*') ? 'bg-white/15 font-semibold' : '' }}">Anggota</a>
                 <a href="{{ route('admin.kyc.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 {{ request()->routeIs('admin.kyc.*') ? 'bg-white/15 font-semibold' : '' }}">Verifikasi KYC</a>
                 <a href="{{ route('admin.loans.applications.index') }}" class="block px-3 py-2 rounded-lg hover:bg-white/10 {{ request()->routeIs('admin.loans.*') ? 'bg-white/15 font-semibold' : '' }}">Persetujuan Pinjaman</a>
             </nav>
